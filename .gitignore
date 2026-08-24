@@ -27,9 +27,9 @@ data/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
-master-resume/
-applications/
-reports/
+/data/master-resume/
+/data/applications/
+/data/reports/
 
 # Logs
 logs/
@@ -45,3 +45,7 @@ Thumbs.db
 
 # Packed extension bundles (release artifacts)
 *.mcpb
+
+# transfer archives
+*.tgz
+PUSH-resumepilot.bat
