@@ -3,30 +3,22 @@
 Two ways to install. **Path A** (Desktop Extension) is the one-click, "authorize
 in the UI" experience. **Path B** (manual config) is the classic MCP setup.
 
-> ### Native module note (read once)
-> ResumePilot uses `better-sqlite3`, a native module. A packed `.mcpb` bundle
-> contains a binary for the OS/CPU it was packed on. The bundle shipped in
-> Releases is **Linux x64**. On macOS or Windows, build your own bundle in one
-> command (Path A, step 1) — it compiles the right binary for your machine.
-> Path B (from source) always builds the correct binary via `npm install`.
+> ### Cross-platform note
+> ResumePilot uses a pure-JavaScript local store (no native module), so the
+> single `resumepilot.mcpb` on the Releases page works on **Windows, macOS and
+> Linux** as-is. No per-OS build needed.
 
 ---
 
 ## Path A — Install as a Claude Desktop Extension (recommended)
 
-### Step 1 — Get a `.mcpb` bundle for your OS
+### Step 1 — Get the `.mcpb` bundle
 
-**macOS / Windows (build your own — correct native binary):**
+Download **`resumepilot.mcpb`** from the
+[Releases](https://github.com/rajeshaipython-stack/auto-apply-resume-pilot/releases)
+page. The same file works on Windows, macOS and Linux.
 
-```bash
-git clone https://github.com/<your-username>/resumepilot-mcp.git
-cd resumepilot-mcp
-npm install
-npm run bundle          # builds + packs -> resumepilot.mcpb
-```
-
-**Linux x64:** download `resumepilot.mcpb` from the repo's Releases, or run the
-same `npm run bundle`.
+(To build it yourself instead: `npm install && npm run bundle`.)
 
 ### Step 2 — Install it in Claude Desktop
 

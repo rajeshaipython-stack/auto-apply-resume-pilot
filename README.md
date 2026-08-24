@@ -59,6 +59,20 @@ npm test
 40 tests cover parsing, scoring, the "never invent" guarantee, optimization,
 tracking, reporting and the end-to-end tool pipeline.
 
+## Download (Claude Desktop extension)
+
+Grab the ready-to-install extension from the **[Releases](https://github.com/rajeshaipython-stack/auto-apply-resume-pilot/releases)** page:
+
+| Download | For |
+|----------|-----|
+| **`resumepilot.mcpb`** | The Claude Desktop extension — **works on Windows, macOS and Linux** (pure-JavaScript, no native binary). Drag it into Claude Desktop → Settings → Extensions. |
+| `install-windows.bat` | One-click build-from-source installer for Windows. |
+| `install-macos.command` | One-click build-from-source installer for macOS. |
+| `install-linux.sh` | Build-from-source installer for Linux. |
+
+Just want the extension? Download **`resumepilot.mcpb`**, open Claude Desktop →
+**Settings → Extensions**, drag the file in, set your data folder, toggle it On.
+
 ## Install into Claude Desktop
 
 Two options — full walkthrough in **[`docs/INSTALL.md`](docs/INSTALL.md)**:

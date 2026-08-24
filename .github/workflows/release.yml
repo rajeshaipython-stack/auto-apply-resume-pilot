@@ -1,0 +1,43 @@
+name: Release
+
+# Publishes downloadable assets to a GitHub Release whenever you push a version
+# tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`).
+#
+# Because ResumePilot now uses a pure-JavaScript store (no native module), a
+# SINGLE .mcpb bundle works on Windows, macOS and Linux — so the download page
+# needs just one extension file plus the per-OS installer scripts.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Validate extension manifest
+        run: npx --yes @anthropic-ai/mcpb@latest validate manifest.json
+      - name: Pack cross-platform extension bundle
+        run: npx --yes @anthropic-ai/mcpb@latest pack . resumepilot.mcpb
+      - name: Publish GitHub Release with downloads
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ResumePilot ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            resumepilot.mcpb
+            scripts/install/install-windows.bat
+            scripts/install/install-macos.command
+            scripts/install/install-linux.sh

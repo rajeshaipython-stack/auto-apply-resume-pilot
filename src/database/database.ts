@@ -1,256 +1,178 @@
-import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
-import { SCHEMA_SQL } from "./schema.js";
 import type {
   MasterProfile,
   StructuredJob,
   ApplicationRecord,
   StatusHistoryEntry,
-  ApplicationStatus,
 } from "../models/index.js";
 
 /**
- * Thin repository over better-sqlite3. Synchronous by design (fine for an MCP
- * stdio server) and easy to unit test with an in-memory database (":memory:").
+ * Local persistence for ResumePilot.
+ *
+ * This is a dependency-free, pure-JavaScript JSON-backed store with the same
+ * repository API the rest of the app expects. It was deliberately chosen over a
+ * native module (e.g. better-sqlite3) so the packaged Claude Desktop extension
+ * (.mcpb) is fully portable and loads under any Node/Electron runtime on
+ * Windows, macOS and Linux without a platform-specific binary.
+ *
+ * Data volume for a single user (profile, jobs, applications, history) is small,
+ * so an in-memory model persisted atomically to one JSON file is more than
+ * sufficient. Status history is kept in a separate map — mirroring a relational
+ * `status_history` table — so application updates never duplicate history.
+ *
+ * Pass ":memory:" for an ephemeral store (used by tests).
  */
+
+interface StoreShape {
+  meta: Record<string, string>;
+  profile: MasterProfile | null;
+  jobs: Record<string, StructuredJob>;
+  /** Application records WITHOUT authoritative history (see `history`). */
+  applications: Record<string, ApplicationRecord>;
+  /** Authoritative, ordered status history per application id. */
+  history: Record<string, StatusHistoryEntry[]>;
+}
+
+function emptyStore(): StoreShape {
+  return { meta: {}, profile: null, jobs: {}, applications: {}, history: {} };
+}
+
+function clone<T>(v: T): T {
+  return v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T);
+}
+
 export class ResumePilotDB {
-  private db: Database.Database;
+  private store: StoreShape = emptyStore();
+  private readonly persistent: boolean;
+  private readonly filePath: string | undefined;
 
   constructor(dbPath: string) {
-    if (dbPath !== ":memory:") {
-      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    this.persistent = dbPath !== ":memory:";
+    if (this.persistent) {
+      // Accept a ".sqlite" path for backwards compatibility; store JSON beside it.
+      this.filePath = dbPath.replace(/\.sqlite$/i, "") + ".json";
+      fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+      this.load();
+    } else {
+      this.filePath = undefined;
     }
-    this.db = new Database(dbPath);
-    this.db.pragma("journal_mode = WAL");
-    this.db.exec(SCHEMA_SQL);
   }
 
   close(): void {
-    this.db.close();
+    if (this.persistent) this.flush();
+  }
+
+  private load(): void {
+    if (!this.filePath || !fs.existsSync(this.filePath)) return;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.filePath, "utf8"));
+      this.store = { ...emptyStore(), ...parsed };
+      this.store.meta ??= {};
+      this.store.jobs ??= {};
+      this.store.applications ??= {};
+      this.store.history ??= {};
+    } catch {
+      this.store = emptyStore();
+    }
+  }
+
+  /** Atomic write: write to a temp file then rename. */
+  private flush(): void {
+    if (!this.persistent || !this.filePath) return;
+    const tmp = this.filePath + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(this.store, null, 2), "utf8");
+    fs.renameSync(tmp, this.filePath);
   }
 
   // ----- meta / counters -------------------------------------------------
   getMeta(key: string): string | undefined {
-    const row = this.db
-      .prepare("SELECT value FROM meta WHERE key = ?")
-      .get(key) as { value: string } | undefined;
-    return row?.value;
+    return this.store.meta[key];
   }
 
   setMeta(key: string, value: string): void {
-    this.db
-      .prepare(
-        "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      )
-      .run(key, value);
+    this.store.meta[key] = value;
+    this.flush();
   }
 
-  /** Atomically allocate the next sequential application number. */
   nextApplicationNumber(): number {
-    const tx = this.db.transaction(() => {
-      const current = Number(this.getMeta("next_application_number") ?? "1");
-      this.setMeta("next_application_number", String(current + 1));
-      return current;
-    });
-    return tx();
+    const current = Number(this.store.meta["next_application_number"] ?? "1");
+    this.store.meta["next_application_number"] = String(current + 1);
+    this.flush();
+    return current;
   }
 
   // ----- profile ---------------------------------------------------------
   saveProfile(profile: MasterProfile): void {
-    this.db
-      .prepare(
-        "INSERT INTO profile(id, json, updated_at) VALUES ('master', ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at",
-      )
-      .run(JSON.stringify(profile), new Date().toISOString());
+    this.store.profile = clone(profile);
+    this.flush();
   }
 
   getProfile(): MasterProfile | undefined {
-    const row = this.db
-      .prepare("SELECT json FROM profile WHERE id = 'master'")
-      .get() as { json: string } | undefined;
-    return row ? (JSON.parse(row.json) as MasterProfile) : undefined;
+    return this.store.profile ? clone(this.store.profile) : undefined;
   }
 
   // ----- jobs ------------------------------------------------------------
   saveJob(job: StructuredJob): void {
-    this.db
-      .prepare(
-        `INSERT INTO jobs(id, fingerprint, title, company, location, source, url, json, created_at)
-         VALUES (@id, @fingerprint, @title, @company, @location, @source, @url, @json, @created_at)
-         ON CONFLICT(id) DO UPDATE SET
-           fingerprint=excluded.fingerprint, title=excluded.title, company=excluded.company,
-           location=excluded.location, source=excluded.source, url=excluded.url, json=excluded.json`,
-      )
-      .run({
-        id: job.id,
-        fingerprint: job.fingerprint,
-        title: job.title ?? null,
-        company: job.company ?? null,
-        location: job.location ?? null,
-        source: job.source.adapter,
-        url: job.source.url ?? job.applicationUrl ?? null,
-        json: JSON.stringify(job),
-        created_at: job.createdAt ?? new Date().toISOString(),
-      });
+    this.store.jobs[job.id] = clone(job);
+    this.flush();
   }
 
   getJob(id: string): StructuredJob | undefined {
-    const row = this.db
-      .prepare("SELECT json FROM jobs WHERE id = ?")
-      .get(id) as { json: string } | undefined;
-    return row ? (JSON.parse(row.json) as StructuredJob) : undefined;
+    return this.store.jobs[id] ? clone(this.store.jobs[id]) : undefined;
   }
 
   findJobByFingerprint(fp: string): StructuredJob | undefined {
-    const row = this.db
-      .prepare("SELECT json FROM jobs WHERE fingerprint = ? LIMIT 1")
-      .get(fp) as { json: string } | undefined;
-    return row ? (JSON.parse(row.json) as StructuredJob) : undefined;
+    const found = Object.values(this.store.jobs).find((j) => j.fingerprint === fp);
+    return found ? clone(found) : undefined;
   }
 
   listJobs(): StructuredJob[] {
-    const rows = this.db
-      .prepare("SELECT json FROM jobs ORDER BY created_at DESC")
-      .all() as { json: string }[];
-    return rows.map((r) => JSON.parse(r.json) as StructuredJob);
+    return Object.values(this.store.jobs)
+      .slice()
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
+      .map((j) => clone(j));
   }
 
   // ----- applications ----------------------------------------------------
   insertApplication(app: ApplicationRecord): void {
-    const tx = this.db.transaction(() => {
-      this.db
-        .prepare(
-          `INSERT INTO applications(
-             id, number, slug, job_id, company, role, source_adapter, job_url,
-             status, original_ats, optimized_ats, match_score, resume_version,
-             resume_pdf_path, resume_docx_path, applied_at, pending_actions,
-             email_updates, created_at, updated_at)
-           VALUES (@id, @number, @slug, @job_id, @company, @role, @source_adapter,
-             @job_url, @status, @original_ats, @optimized_ats, @match_score,
-             @resume_version, @resume_pdf_path, @resume_docx_path, @applied_at,
-             @pending_actions, @email_updates, @created_at, @updated_at)`,
-        )
-        .run(this.toRow(app));
-      for (const h of app.statusHistory) this.insertHistory(app.id, h);
-    });
-    tx();
+    // History is authoritative in `history`; seed it from the record, then store
+    // the record with an empty history so reads never double-count.
+    this.store.history[app.id] = clone(app.statusHistory ?? []);
+    this.store.applications[app.id] = { ...clone(app), statusHistory: [] };
+    this.flush();
   }
 
   updateApplication(app: ApplicationRecord): void {
-    this.db
-      .prepare(
-        `UPDATE applications SET
-           company=@company, role=@role, source_adapter=@source_adapter, job_url=@job_url,
-           status=@status, original_ats=@original_ats, optimized_ats=@optimized_ats,
-           match_score=@match_score, resume_version=@resume_version,
-           resume_pdf_path=@resume_pdf_path, resume_docx_path=@resume_docx_path,
-           applied_at=@applied_at, pending_actions=@pending_actions,
-           email_updates=@email_updates, updated_at=@updated_at
-         WHERE id=@id`,
-      )
-      .run(this.toRow(app));
+    if (!this.store.applications[app.id]) {
+      this.insertApplication(app);
+      return;
+    }
+    // Preserve authoritative history; ignore the record's own statusHistory.
+    this.store.applications[app.id] = { ...clone(app), statusHistory: [] };
+    this.flush();
   }
 
   insertHistory(applicationId: string, h: StatusHistoryEntry): void {
-    this.db
-      .prepare(
-        "INSERT INTO status_history(application_id, status, at, note, source) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(applicationId, h.status, h.at, h.note ?? null, h.source);
+    (this.store.history[applicationId] ??= []).push(clone(h));
+    this.flush();
   }
 
   getApplication(id: string): ApplicationRecord | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM applications WHERE id = ?")
-      .get(id) as Record<string, unknown> | undefined;
+    const row = this.store.applications[id];
     if (!row) return undefined;
-    return this.fromRow(row);
+    return { ...clone(row), statusHistory: clone(this.store.history[id] ?? []) };
   }
 
   getApplicationByNumber(n: number): ApplicationRecord | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM applications WHERE number = ?")
-      .get(n) as Record<string, unknown> | undefined;
-    return row ? this.fromRow(row) : undefined;
+    const row = Object.values(this.store.applications).find((a) => a.number === n);
+    return row ? this.getApplication(row.id) : undefined;
   }
 
   listApplications(): ApplicationRecord[] {
-    const rows = this.db
-      .prepare("SELECT * FROM applications ORDER BY number ASC")
-      .all() as Record<string, unknown>[];
-    return rows.map((r) => this.fromRow(r));
-  }
-
-  private getHistory(applicationId: string): StatusHistoryEntry[] {
-    const rows = this.db
-      .prepare(
-        "SELECT status, at, note, source FROM status_history WHERE application_id = ? ORDER BY at ASC, id ASC",
-      )
-      .all(applicationId) as {
-      status: string;
-      at: string;
-      note: string | null;
-      source: string;
-    }[];
-    return rows.map((r) => ({
-      status: r.status as ApplicationStatus,
-      at: r.at,
-      note: r.note ?? undefined,
-      source: r.source,
-    }));
-  }
-
-  // ----- row mapping -----------------------------------------------------
-  private toRow(app: ApplicationRecord): Record<string, unknown> {
-    return {
-      id: app.id,
-      number: app.number,
-      slug: app.slug,
-      job_id: app.jobId,
-      company: app.company ?? null,
-      role: app.role ?? null,
-      source_adapter: app.jobSourceAdapter,
-      job_url: app.jobUrl ?? null,
-      status: app.status,
-      original_ats: app.originalAtsScore ?? null,
-      optimized_ats: app.optimizedAtsScore ?? null,
-      match_score: app.matchScore ?? null,
-      resume_version: app.resumeVersion ?? null,
-      resume_pdf_path: app.resumePdfPath ?? null,
-      resume_docx_path: app.resumeDocxPath ?? null,
-      applied_at: app.appliedAt ?? null,
-      pending_actions: JSON.stringify(app.pendingManualActions ?? []),
-      email_updates: JSON.stringify(app.emailUpdates ?? []),
-      created_at: app.createdAt,
-      updated_at: app.updatedAt,
-    };
-  }
-
-  private fromRow(row: Record<string, unknown>): ApplicationRecord {
-    const id = row.id as string;
-    return {
-      id,
-      number: row.number as number,
-      slug: row.slug as string,
-      jobId: row.job_id as string,
-      company: (row.company as string) ?? undefined,
-      role: (row.role as string) ?? undefined,
-      jobSourceAdapter: row.source_adapter as string,
-      jobUrl: (row.job_url as string) ?? undefined,
-      status: row.status as ApplicationStatus,
-      statusHistory: this.getHistory(id),
-      originalAtsScore: (row.original_ats as number) ?? undefined,
-      optimizedAtsScore: (row.optimized_ats as number) ?? undefined,
-      matchScore: (row.match_score as number) ?? undefined,
-      resumeVersion: (row.resume_version as string) ?? undefined,
-      resumePdfPath: (row.resume_pdf_path as string) ?? undefined,
-      resumeDocxPath: (row.resume_docx_path as string) ?? undefined,
-      appliedAt: (row.applied_at as string) ?? undefined,
-      emailUpdates: JSON.parse((row.email_updates as string) ?? "[]"),
-      pendingManualActions: JSON.parse((row.pending_actions as string) ?? "[]"),
-      createdAt: row.created_at as string,
-      updatedAt: row.updated_at as string,
-    };
+    return Object.values(this.store.applications)
+      .slice()
+      .sort((a, b) => a.number - b.number)
+      .map((a) => this.getApplication(a.id)!);
   }
 }
