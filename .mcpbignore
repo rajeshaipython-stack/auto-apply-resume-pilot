@@ -1,19 +1,28 @@
+# Bundle-root-anchored ignores (leading slash) so they do NOT match nested
+# paths like dist/src or node_modules/*/src. The compiled server lives in
+# dist/src and MUST ship in the bundle.
+
 # Source & dev-only material (the bundle ships the built dist/)
-src/
-scripts/
-tests/
-coverage/
-docs/
+/src/
+/scripts/
+/tests/
+/coverage/
+/docs/
+/tsconfig.json
+/vitest.config.ts
+/.gitignore
+/.mcpbignore
+/.github/
+/.git/
+
+# Source maps (safe anywhere)
 *.map
-tsconfig.json
-vitest.config.ts
-.gitignore
-.mcpbignore
+
 # Never ship personal data or secrets
-data/
-.env
-*.sqlite*
-# VCS / OS
-.git/
-.github/
+/data/
+/.env
+*.sqlite
+*.sqlite-journal
+
+# OS
 .DS_Store
