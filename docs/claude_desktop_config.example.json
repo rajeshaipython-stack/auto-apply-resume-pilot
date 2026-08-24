@@ -1,0 +1,18 @@
+{
+  "//": "Add this under the top-level \"mcpServers\" key of your Claude Desktop config.",
+  "//_macos": "~/Library/Application Support/Claude/claude_desktop_config.json",
+  "//_windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+  "//_command": "Use the ABSOLUTE path to the built entry file (dist/src/index.js) after running `npm run build`.",
+  "mcpServers": {
+    "resumepilot": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/resumepilot-mcp/dist/src/index.js"],
+      "env": {
+        "RESUMEPILOT_DATA_DIR": "/ABSOLUTE/PATH/TO/your-private-resumepilot-data",
+        "ATS_TARGET_SCORE": "90",
+        "MATCH_SCORE_THRESHOLD": "60",
+        "RESUMEPILOT_LOG_LEVEL": "info"
+      }
+    }
+  }
+}

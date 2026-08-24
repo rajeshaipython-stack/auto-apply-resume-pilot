@@ -1,0 +1,88 @@
+{
+  "manifest_version": "0.2",
+  "name": "resumepilot-mcp",
+  "display_name": "ResumePilot",
+  "version": "0.1.0",
+  "description": "Universal Job Application assistant: parse one master resume, build a reusable profile, score jobs (ATS/match), generate tailored resumes that never invent information, track applications, and produce a PDF report.",
+  "long_description": "ResumePilot turns your ONE master resume into a full job-application workflow inside Claude Desktop. It parses your resume, asks only for missing profile info, analyzes any job description against it, computes original vs optimized ATS scores, generates a job-specific tailored resume (PDF + DOCX) using ONLY information genuinely present in your material, tracks every application in a local SQLite database, and generates a final PDF report with per-application tracking pages. It never stores passwords or OTPs, never bypasses CAPTCHA/2FA, and never invents skills, experience, education or certifications.",
+  "author": {
+    "name": "ResumePilot contributors"
+  },
+  "license": "MIT",
+  "keywords": ["resume", "ats", "jobs", "career", "job-application", "mcp"],
+  "icon": "assets/icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/src/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/src/index.js"],
+      "env": {
+        "RESUMEPILOT_DATA_DIR": "${user_config.data_dir}",
+        "ATS_TARGET_SCORE": "${user_config.ats_target_score}",
+        "MATCH_SCORE_THRESHOLD": "${user_config.match_score_threshold}",
+        "RESUMEPILOT_LOG_LEVEL": "${user_config.log_level}"
+      }
+    }
+  },
+  "user_config": {
+    "data_dir": {
+      "type": "directory",
+      "title": "Data folder",
+      "description": "Private folder where your resume, profile, application versions, tracking database and reports are stored. Keep it somewhere only you can access.",
+      "required": false,
+      "default": "${HOME}/ResumePilot"
+    },
+    "ats_target_score": {
+      "type": "number",
+      "title": "Target ATS score",
+      "description": "The ATS score the optimizer aims for (never guaranteed, never keyword-stuffed).",
+      "required": false,
+      "default": 90,
+      "min": 0,
+      "max": 100
+    },
+    "match_score_threshold": {
+      "type": "number",
+      "title": "Apply threshold",
+      "description": "Minimum overall match score for a job to be recommended for applying.",
+      "required": false,
+      "default": 60,
+      "min": 0,
+      "max": 100
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log level",
+      "description": "error, warn, info, or debug (logs go to Claude's MCP logs only).",
+      "required": false,
+      "default": "info"
+    }
+  },
+  "tools": [
+    { "name": "upload_master_resume", "description": "Register the immutable master resume (PDF/DOCX/TXT/text)." },
+    { "name": "analyze_master_resume", "description": "Parse it, seed the profile, list missing info." },
+    { "name": "setup_user_profile", "description": "Apply answers to the missing-info questionnaire." },
+    { "name": "get_user_profile", "description": "Return the current Master Profile." },
+    { "name": "update_user_profile", "description": "Correct or extend profile fields." },
+    { "name": "connect_job_source", "description": "Inspect/connect a job-source adapter." },
+    { "name": "search_jobs", "description": "Search connected sources (Phase 2+)." },
+    { "name": "analyze_job", "description": "Analyze a job description; compute original ATS/match; create a tracked application." },
+    { "name": "rank_jobs", "description": "Rank analyzed applications by match score." },
+    { "name": "optimize_resume_for_job", "description": "Generate the tailored resume; original vs optimized ATS." },
+    { "name": "generate_application_profile", "description": "Autofill map + known/unknown questions." },
+    { "name": "prepare_application", "description": "Ready-to-apply checklist + resume to attach." },
+    { "name": "apply_to_job", "description": "Submit where supported; else pause; record APPLIED on confirmation." },
+    { "name": "get_application_status", "description": "Status/scores/timeline for one or all applications." },
+    { "name": "search_application_emails", "description": "Find + classify recruiter emails; update status." },
+    { "name": "update_application_tracking", "description": "Manual status/email updates." },
+    { "name": "generate_application_report", "description": "Final PDF report + HTML tracking pages." }
+  ],
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

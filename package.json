@@ -1,0 +1,63 @@
+{
+  "name": "resumepilot-mcp",
+  "version": "0.1.0",
+  "description": "ResumePilot MCP — a scalable Universal Job Application MCP server for Claude Desktop. Parses a master resume, builds a master profile, analyzes job descriptions, computes ATS/match scores, generates job-specific tailored resumes (never inventing information), tracks applications in SQLite, and produces a final PDF report.",
+  "type": "module",
+  "license": "MIT",
+  "author": "ResumePilot contributors",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "resume",
+    "ats",
+    "job-application",
+    "claude",
+    "career"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "bin": {
+    "resumepilot-mcp": "dist/src/index.js"
+  },
+  "main": "dist/src/index.js",
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/index.js",
+    "dev": "tsc -w -p tsconfig.json",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "demo": "node dist/scripts/demo.js",
+    "bundle": "npm run build && npx --yes @anthropic-ai/mcpb@latest pack . resumepilot.mcpb",
+    "bundle:validate": "npx --yes @anthropic-ai/mcpb@latest validate manifest.json",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.8.1",
+    "mammoth": "^1.9.0",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.15.1",
+    "docx": "^9.1.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/pdfkit": "^0.13.9",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,19 @@
+# Source & dev-only material (the bundle ships the built dist/)
+src/
+scripts/
+tests/
+coverage/
+docs/
+*.map
+tsconfig.json
+vitest.config.ts
+.gitignore
+.mcpbignore
+# Never ship personal data or secrets
+data/
+.env
+*.sqlite*
+# VCS / OS
+.git/
+.github/
+.DS_Store

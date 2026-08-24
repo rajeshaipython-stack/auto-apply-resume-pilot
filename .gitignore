@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Environment & secrets — NEVER commit real credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# ResumePilot runtime data (personal information, resumes, tracking DB)
+# This is the user's private data directory. Never commit it.
+data/
+!data/.gitkeep
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+master-resume/
+applications/
+reports/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Packed extension bundles (release artifacts)
+*.mcpb
